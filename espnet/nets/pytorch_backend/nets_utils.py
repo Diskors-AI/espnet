@@ -2,6 +2,7 @@
 
 """Network related utility tools."""
 
+import inspect
 import logging
 from typing import Dict
 
@@ -158,6 +159,12 @@ def make_pad_mask(lengths, xs=None, length_dim=-1, maxlen=None):
             "Using make_pad_mask with a list of lengths is not tracable. "
             + "If you try to trace this function with type(lengths) == list, "
             + "please change the type of lengths to torch.LongTensor."
+        )
+        # Print file name and line number of the calling function
+        frame = inspect.currentframe()
+        caller = inspect.getouterframes(frame, 2)
+        logging.warning(
+            f"make_pad_mask called from {caller[1].filename}, line {caller[1].lineno}"
         )
 
     if (
