@@ -27,6 +27,8 @@ inference_config=conf/decode.yaml
 g2p=none # Assuming all phonemes have been specified in the data sets
 cleaner=maltese # Assuming all the text has already been cleaned
 gpus=1 # Specify the number of GPUs to use
+nj=32 # Specify the number of jobs
+nj_inference=16 # Specify the number of jobs for inference
 
 ./tts.sh \
     --lang mt \
@@ -44,4 +46,6 @@ gpus=1 # Specify the number of GPUs to use
     --test_sets "${test_sets}" \
     --srctexts "data/${train_set}/text" \
     --ngpu "${gpus}" \
+    --nj "${nj}" \
+    --inference_nj "${nj_inference}" \
     ${opts} "$@"
