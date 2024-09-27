@@ -229,6 +229,7 @@ def get_parser() -> argparse.ArgumentParser:
             "korean_cleaner",
             "whisper_en",
             "whisper_basic",
+            "maltese",
         ],
         default=None,
         help="Apply text cleaning",

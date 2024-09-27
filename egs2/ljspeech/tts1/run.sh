@@ -24,17 +24,18 @@ test_sets="dev eval1"
 train_config=conf/train.yaml
 inference_config=conf/decode.yaml
 
-# g2p=g2p_en # Include word separator
-g2p=g2p_en_no_space # Include no word separator
+g2p=none # Assuming all phonemes have been specified in the data sets
+cleaner=maltese # Assuming all the text has already been cleaned
+gpus=1 # Specify the number of GPUs to use
 
 ./tts.sh \
-    --lang en \
+    --lang mt \
     --feats_type raw \
     --fs "${fs}" \
     --n_fft "${n_fft}" \
     --n_shift "${n_shift}" \
     --token_type phn \
-    --cleaner tacotron \
+    --cleaner "${cleaner}" \
     --g2p "${g2p}" \
     --train_config "${train_config}" \
     --inference_config "${inference_config}" \
@@ -42,4 +43,5 @@ g2p=g2p_en_no_space # Include no word separator
     --valid_set "${valid_set}" \
     --test_sets "${test_sets}" \
     --srctexts "data/${train_set}/text" \
+    --ngpu "${gpus}" \
     ${opts} "$@"

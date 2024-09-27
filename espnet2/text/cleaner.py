@@ -1,5 +1,6 @@
 from typing import Collection, Optional
 
+from espnet2.text import maltese_cleaner
 import tacotron_cleaner.cleaners
 from jaconv import jaconv
 from typeguard import typechecked
@@ -59,6 +60,8 @@ class TextCleaner:
                 text = KoreanCleaner.normalize_text(text)
             elif "whisper" in t and self.whisper_cleaner is not None:
                 text = self.whisper_cleaner(text)
+            elif t == "maltese":
+                text = maltese_cleaner.clean(text)
             else:
                 raise RuntimeError(f"Not supported: type={t}")
 
