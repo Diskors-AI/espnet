@@ -320,6 +320,11 @@ class AttLoc(torch.nn.Module):
         :return: previous attention weights (B x T_max)
         :rtype: torch.Tensor
         """
+
+        # Convert enc_hs_len to torch.LongTensor if it's a list
+        if isinstance(enc_hs_len, list):
+            enc_hs_len = torch.LongTensor(enc_hs_len).to(enc_hs_pad.device)
+
         batch = len(enc_hs_pad)
         # pre-compute all h outside the decoder loop
         if self.pre_compute_enc_h is None or self.han_mode:
@@ -336,10 +341,11 @@ class AttLoc(torch.nn.Module):
         # initialize attention weight with uniform dist.
         if att_prev is None:
             # if no bias, 0 0-pad goes 0
-            att_prev = 1.0 - make_pad_mask(enc_hs_len).to(
+            # also create padding mask using tensor type for compatibility
+            att_prev = 1.0 - make_pad_mask(enc_hs_len.to(enc_hs_pad.device)).to(
                 device=dec_z.device, dtype=dec_z.dtype
             )
-            att_prev = att_prev / att_prev.new(enc_hs_len).unsqueeze(-1)
+            att_prev = att_prev / att_prev.new_tensor(enc_hs_len).unsqueeze(-1)
 
         # att_prev: utt x frame -> utt x 1 x 1 x frame
         # -> utt x att_conv_chans x 1 x frame
@@ -358,7 +364,7 @@ class AttLoc(torch.nn.Module):
             torch.tanh(att_conv + self.pre_compute_enc_h + dec_z_tiled)
         ).squeeze(2)
 
-        # NOTE: consider zero padding when compute w.
+        # Ensure the mask is created correctly and applied
         if self.mask is None:
             self.mask = to_device(enc_hs_pad, make_pad_mask(enc_hs_len))
         e.masked_fill_(self.mask, -float("inf"))
@@ -369,8 +375,10 @@ class AttLoc(torch.nn.Module):
                 e, last_attended_idx, backward_window, forward_window
             )
 
+        # Compute the softmax weights
         w = F.softmax(scaling * e, dim=1)
 
+        # Compute weighted sum over frames
         # weighted sum over flames
         # utt x hdim
         c = torch.sum(self.enc_h * w.view(batch, self.h_length, 1), dim=1)
