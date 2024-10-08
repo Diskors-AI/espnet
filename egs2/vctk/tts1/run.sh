@@ -36,7 +36,7 @@ g2p=g2p_en_no_space # Include no word separator
     --n_shift "${n_shift}" \
     --win_length "${win_length}" \
     --token_type phn \
-    --cleaner tacotron \
+    --cleaner maltese \
     --g2p "${g2p}" \
     --train_config "${train_config}" \
     --inference_config "${inference_config}" \
