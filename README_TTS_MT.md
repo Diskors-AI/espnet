@@ -1,6 +1,6 @@
-# TTS Training Workflow for Tacotron2 and FastSpeech2
+# TTS Training Workflow for VITS
 
-This flow provides step-by-step instructions for setting up and training a Text-to-Speech (TTS) model using ESPnet. It assumes that you already have a WAV corpus that has been force-aligned using the Montreal Forced Aligner (MFA) and that the corresponding TextGrid files have been generated. The aligned data will be used in subsequent stages to prepare training data, extract speaker embeddings, and train TTS models such as Tacotron2 and FastSpeech2.
+This flow provides step-by-step instructions for setting up and training a Text-to-Speech (TTS) model using ESPnet with the VITS architecture. It assumes that you already have a WAV corpus aligned using the Montreal Forced Aligner (MFA) and that the corresponding TextGrid files have been generated. The aligned data will be used to prepare training data, extract speaker embeddings, and train the VITS TTS model.
 
 ## 1. Initial Setup
 
@@ -21,9 +21,9 @@ Ensure the following directory structure in your workspace:
 
 ### 1.2. Install Required Locales and Dependencies
 
-#### Install UTF-8 Locales
+Install UTF-8 Locales
 
-This ensures Maltese characters are processed correctly:
+To handle Maltese characters:
 
 ```bash
 apt-get install locales
@@ -45,15 +45,16 @@ git remote add upstream https://github.com/espnet/espnet.git
 git fetch upstream
 git merge upstream/main
 
+# Create a venv if it does not exist yet.
+pyenv virtualenv espnet
+pyenv activate espnet
+
 # Initialize submodules
 git submodule update --init
 
 # Install Python requirements
-pip install -e .
-
-# Install additional required packages
-pip install praatio tensorboard matplotlib torchaudio wheel flash_attn
-pip install -U espnet_model_zoo
+pip install -e ".[tts]" # Install TTS dependencies
+pip install kaldiio torchaudio
 ```
 
 #### Symlink Directories
@@ -61,36 +62,32 @@ pip install -U espnet_model_zoo
 Link the data, dump, and exp directories in the ESPnet setup:
 
 ```bash
-ln -s /workspace/data /workspace/espnet/egs2/ljspeech/tts1/data
-ln -s /workspace/dump /workspace/espnet/egs2/ljspeech/tts1/dump
-ln -s /workspace/exp /workspace/espnet/egs2/ljspeech/tts1/exp
+ln -s /workspace/data /workspace/espnet/egs2/vctk/tts1/data
+ln -s /workspace/dump /workspace/espnet/egs2/vctk/tts1/dump
+ln -s /workspace/exp /workspace/espnet/egs2/vctk/tts1/exp
 ```
 
 ## 2. Data Preparation
 
 ### 2.1. Downsampling Audio
 
-Downsample WAV files from 44100 Hz to 22050 Hz since it's sufficient for voice compression.
+Downsample WAV files from 44100 Hz to 22050 Hz if necessary, and convert to Mono, for optimal TTS performance.
 
 ### 2.2. Prepare Data from MFA Alignments
 
-**Relative Path**: `egs2/ljspeech/tts1/pyscripts/utils`
+**Relative Path**: egs2/vctk/tts1/pyscripts/utils
 
-Prepare data for ESPnet from Montreal Forced Aligner (MFA) alignments. Each TextGrid file should contain three tiers: words, phones, and utterances.
-
-#### Command:
+Use MFA alignments to prepare data for ESPnet. Each TextGrid file should contain three tiers: words, phones, and utterances.
 
 ```bash
-python mfa_prep_stage2_data.py --alignments_dir /workspace/data/corpus/alignments \
-    --corpus_dir /workspace/data/corpus/wav \
-    --output_dir /workspace/data
+python mfa_prep_stage2_data.py --alignments_dir /workspace/data/corpus/alignments     --corpus_dir /workspace/data/corpus/wav     --output_dir /workspace/data
 ```
 
 ### 2.3. Validate Data
 
-**Relative Path**: `egs2/ljspeech/tts1`
+**Relative Path**: egs2/vctk/tts1
 
-Validate the prepared data to ensure correct formatting.
+Validate the prepared data:
 
 ```bash
 ./utils/validate_data_dir.sh --no-feats /workspace/data/tr_no_dev
@@ -100,91 +97,69 @@ Validate the prepared data to ensure correct formatting.
 
 ### 2.4. Prepare Phoneme Data
 
-**Relative Path**: `egs2/ljspeech/tts1`
-
-Create equivalent phoneme data for each dataset (train, dev, eval):
+Create phoneme data for each dataset (train, dev, eval):
 
 ```bash
 ./utils/mfa_prep_stage2_phoneme_data.sh /workspace/data
 ```
 
-## 3. Tacotron2 Training
+## 3. Setting Up VITS with Speaker Embeddings
 
-### 3.1. Run Stages 2 and 3: Data Preparation and Speaker Embedding Extraction
+### 3.1. Enabling Speaker Embeddings and IDs
 
-**Relative Path**: `egs2/ljspeech/tts1`
+To leverage the multi-speaker capability of VITS, we’ll enable speaker embeddings with Kaldi for x-vector extraction and ensure each speaker has a unique identifier (SID). Additionally, enabling GST (Global Style Tokens) is optional but beneficial if the dataset includes varied speaking styles.
 
-Enable speaker embedding extraction by setting `--use_spk_embed true` and specify the embedding tool (e.g., `espnet`):
-
-```bash
-./run.sh --stage 2 --stop-stage 3 --use_spk_embed true --spk_embed_tool espnet
-```
-
-### 3.2. (Optional) Run Stages 4-5: Filter Utterances and Generate Token List
-
-**Relative Path**: `egs2/ljspeech/tts1`
-
-Run this step if filtering utterances and generating token lists are necessary:
+Run the following command to initiate speaker embedding extraction and set Kaldi as the embedding tool:
 
 ```bash
-./run.sh --stage 4 --stop-stage 5 --use_spk_embed true
+./run.sh --stage 2 --stop-stage 3 --use_spk_embed true --spk_embed_tool kaldi --use_sid true --use_gst true
 ```
 
-### 3.3. Run Stages 6-8: Train the Tacotron2 Teacher Model
+Explanation of flags:
 
-**Relative Path**: `egs2/ljspeech/tts1`
+    •	--use_spk_embed true: Enables extraction of speaker embeddings to differentiate voices in multi-speaker datasets.
+    •	--spk_embed_tool kaldi: Specifies Kaldi as the tool for x-vector embedding extraction, utilizing pre-trained x-vector embeddings.
+    •	--use_sid true: Assigns a unique Speaker ID (SID) to each speaker, helping the model distinguish between them.
+    •	--use_gst true (optional): Activates GST to capture style variations, such as prosody and intonation, improving the model’s ability to generalize across different speech styles.
 
-Train the teacher model (Tacotron2) using the prepared data:
+### 3.2. Using the Pre-trained VCTK VITS Model as Starting Point
+
+Download the pre-trained VCTK VITS model to use as an initialization point for training:
 
 ```bash
-./run.sh --stage 6 --use_spk_embed true
+cd egs2/vctk/tts1
+wget https://zenodo.org/record/5500759/files/tts_train_multi_spk_vits_raw_phn_tacotron_g2p_en_no_space_train.total_count.ave.zip?download=1 -O pretrained_vctk_vits.zip
+
+# Unzip and place the model in the `exp/` directory
+unzip pretrained_vctk_vits.zip -d exp/pretrained_vctk_vits
 ```
 
-## 4. FastSpeech2 Training
+Update the train_xvector_vits.yaml (under conf/tuning) configuration file to point to the pre-trained model:
 
-After completing Tacotron2 training, follow these steps to train FastSpeech2.
+```yaml
+pretrain_model: /path/to/exp/pretrained_vctk_vits/model.pth # Path to the downloaded model
+```
 
-### 4.1. Generate Durations with Teacher-Forcing Mode
+## 4. Training the VITS Model
 
-**Relative Path**: `egs2/ljspeech/tts1`
-
-Decode the data using teacher-forcing mode to get groundtruth-aligned durations.
+Run the VITS training steps with speaker embeddings and the pre-trained model configuration:
 
 ```bash
-./run.sh --stage 8 \
-    --tts_exp exp/tts_train_raw_phn_tacotron_g2p_en_no_space \
-    --inference_args "--use_teacher_forcing true" \
-    --test_sets "tr_no_dev dev eval1"
+./run.sh --stage 1 --stop-stage 6 --train-config conf/tuning/train_xvector_vits.yaml --use_xvector true --xvector-dir data/train/xvector.scp
 ```
 
-This will generate durations in:
+### 4.1. Monitor Training Progress
 
-```
-exp/tts_train_raw_phn_tacotron_g2p_en_no_space/decode_use_teacher_forcingtrue_train.loss.ave
-```
+Check logs for validation and training metrics:
 
-### 4.2. Calculate Statistics for FastSpeech2 Training
+# Monitor training logs
 
-**Relative Path**: `egs2/ljspeech/tts1`
+tail -f exp/pretrained_vctk_vits/log/train.log
 
-You need to calculate additional statistics like F0 and energy for FastSpeech2. Use the following command:
+## 5. Inference and Evaluation
+
+After training, run inference to test the model:
 
 ```bash
-./run.sh --stage 6 \
-    --train_config conf/tuning/train_fastspeech2.yaml \
-    --teacher_dumpdir exp/tts_train_raw_phn_tacotron_g2p_en_no_space/decode_use_teacher_forcingtrue_train.loss.ave \
-    --tts_stats_dir exp/tts_train_raw_phn_tacotron_g2p_en_no_space/decode_use_teacher_forcingtrue_train.loss.ave/stats \
-    --write_collected_feats true
-```
-
-### 4.3. Train FastSpeech2
-
-**Relative Path**: `egs2/ljspeech/tts1`
-
-Finally, train FastSpeech2 using the durations generated from the teacher model:
-
-```bash
-./run.sh --stage 7 \
-    --train_config conf/tuning/train_fastspeech2.yaml \
-    --teacher_dumpdir exp/tts_train_raw_phn_tacotron_g2p_en_no_space/decode_use_teacher_forcingtrue_train.loss.ave
+./run.sh --stage 7 --stop-stage 8 --inference-config conf/decode.yaml --inference_tag test_with_vits
 ```
