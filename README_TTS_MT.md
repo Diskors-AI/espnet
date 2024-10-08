@@ -117,10 +117,10 @@ Run the following command to initiate speaker embedding extraction and set Kaldi
 
 Explanation of flags:
 
-    •	--use_spk_embed true: Enables extraction of speaker embeddings to differentiate voices in multi-speaker datasets.
-    •	--spk_embed_tool kaldi: Specifies Kaldi as the tool for x-vector embedding extraction, utilizing pre-trained x-vector embeddings.
-    •	--use_sid true: Assigns a unique Speaker ID (SID) to each speaker, helping the model distinguish between them.
-    •	--use_gst true (optional): Activates GST to capture style variations, such as prosody and intonation, improving the model’s ability to generalize across different speech styles.
+    • **--use_spk_embed true**: Enables extraction of speaker embeddings to differentiate voices in multi-speaker datasets.
+    • **--spk_embed_tool kaldi**: Specifies Kaldi as the tool for x-vector embedding extraction, utilizing pre-trained x-vector embeddings.
+    • **--use_sid true**: Assigns a unique Speaker ID (SID) to each speaker, helping the model distinguish between them.
+    • **--use_gst true** (optional): Activates GST to capture style variations, such as prosody and intonation, improving the model’s ability to generalize across different speech styles.
 
 ### 3.2. Using the Pre-trained VCTK VITS Model as Starting Point
 
@@ -152,9 +152,11 @@ Run the VITS training steps with speaker embeddings and the pre-trained model co
 
 Check logs for validation and training metrics:
 
-# Monitor training logs
+#### Monitor training logs
 
+```bash
 tail -f exp/pretrained_vctk_vits/log/train.log
+```
 
 ## 5. Inference and Evaluation
 
