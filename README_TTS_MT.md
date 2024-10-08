@@ -80,7 +80,7 @@ Downsample WAV files from 44100 Hz to 22050 Hz if necessary, and convert to Mono
 Use MFA alignments to prepare data for ESPnet. Each TextGrid file should contain three tiers: words, phones, and utterances.
 
 ```bash
-python mfa_prep_stage2_data.py --alignments_dir /workspace/data/corpus/alignments     --corpus_dir /workspace/data/corpus/wav     --output_dir /workspace/data
+python mfa_prep_stage2_data.py --alignments_dir /workspace/data/corpus/alignments --corpus_dir /workspace/data/corpus/wav --output_dir /workspace/data
 ```
 
 ### 2.3. Validate Data
