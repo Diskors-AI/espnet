@@ -117,10 +117,10 @@ Run the following command to initiate speaker embedding extraction and set Kaldi
 
 Explanation of flags:
 
-* `--use_spk_embed true`: Enables extraction of speaker embeddings to differentiate voices in multi-speaker datasets.
-* `--spk_embed_tool kaldi`: Specifies Kaldi as the tool for x-vector embedding extraction, utilizing pre-trained x-vector embeddings.
-* `--use_sid true`: Assigns a unique Speaker ID (SID) to each speaker, helping the model distinguish between them.
-* `--use_gst true`: (optional) Activates GST to capture style variations, such as prosody and intonation, improving the model’s ability to generalize across different speech styles.
+- `--use_spk_embed true`: Enables extraction of speaker embeddings to differentiate voices in multi-speaker datasets.
+- `--spk_embed_tool kaldi`: Specifies Kaldi as the tool for x-vector embedding extraction, utilizing pre-trained x-vector embeddings.
+- `--use_sid true`: Assigns a unique Speaker ID (SID) to each speaker, helping the model distinguish between them.
+- `--use_gst true`: (optional) Activates GST to capture style variations, such as prosody and intonation, improving the model’s ability to generalize across different speech styles.
 
 ### 3.2. Using the Pre-trained VCTK VITS Model as Starting Point
 
@@ -134,18 +134,19 @@ wget https://zenodo.org/record/5500759/files/tts_train_multi_spk_vits_raw_phn_ta
 unzip pretrained_vctk_vits.zip -d exp/pretrained_vctk_vits
 ```
 
-Update the train_xvector_vits.yaml (under conf/tuning) configuration file to point to the pre-trained model:
-
-```yaml
-pretrain_model: /path/to/exp/pretrained_vctk_vits/model.pth # Path to the downloaded model
-```
+The model's pth file will be accessible at `exp/pretrained_vctk_vits/exp/tts_train_multi_spk_vits_raw_phn_tacotron_g2p_en_no_space/train.total_count.ave_10best.pth`
 
 ## 4. Training the VITS Model
 
 Run the VITS training steps with speaker embeddings and the pre-trained model configuration:
 
 ```bash
-./run.sh --stage 1 --stop-stage 6 --train-config conf/tuning/train_xvector_vits.yaml --use_xvector true --xvector-dir data/train/xvector.scp
+./run.sh --stage 4 --stop-stage 6 \
+    --train_config conf/tuning/train_xvector_vits.yaml \
+    --use_xvector true \
+    --xvector_dir data/train/xvector.scp \
+    --train_args "--init_param /path/to/pretrained_model.pth:tts:tts" \
+    --tag finetune_vits_xvector_maltese
 ```
 
 ### 4.1. Monitor Training Progress
