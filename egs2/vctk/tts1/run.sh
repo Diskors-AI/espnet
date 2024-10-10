@@ -5,13 +5,13 @@ set -e
 set -u
 set -o pipefail
 
-fs=24000
-n_fft=2048
-n_shift=300
-win_length=1200
+fs=22050
+n_fft=1024
+n_shift=256
+win_length=1024
 
 opts=
-if [ "${fs}" -eq 48000 ]; then
+if [ "${fs}" -eq 22050 ]; then
     # To suppress recreation, specify wav format
     opts="--audio_format wav "
 else
