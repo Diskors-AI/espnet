@@ -112,7 +112,7 @@ To leverage the multi-speaker capability of VITS, we’ll enable speaker embeddi
 Run the following command to initiate speaker embedding extraction and set Kaldi as the embedding tool:
 
 ```bash
-./run.sh --stage 2 --stop-stage 3 --use_spk_embed true --spk_embed_tool kaldi --use_sid true --use_gst true
+./run.sh --stage 2 --stop-stage 3 --use_spk_embed true --spk_embed_tool kaldi --use_sid true
 ```
 
 Explanation of flags:
@@ -120,7 +120,6 @@ Explanation of flags:
 - `--use_spk_embed true`: Enables extraction of speaker embeddings to differentiate voices in multi-speaker datasets.
 - `--spk_embed_tool kaldi`: Specifies Kaldi as the tool for x-vector embedding extraction, utilizing pre-trained x-vector embeddings.
 - `--use_sid true`: Assigns a unique Speaker ID (SID) to each speaker, helping the model distinguish between them.
-- `--use_gst true`: (optional) Activates GST to capture style variations, such as prosody and intonation, improving the model’s ability to generalize across different speech styles.
 
 ### 3.2. Using the Pre-trained VCTK VITS Model as Starting Point
 
