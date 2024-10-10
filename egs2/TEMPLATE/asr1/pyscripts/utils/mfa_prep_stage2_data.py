@@ -1,5 +1,6 @@
 import argparse
 from pathlib import Path
+import re
 from praatio import textgrid
 import soundfile as sf
 from collections import defaultdict
@@ -11,6 +12,13 @@ dev_dir_name = "dev"
 test_dir_name = "eval1"
 
 
+# Define regex to match markers such as {laugh}, {cough}, etc.
+MARKER_PATTERN = re.compile(r"\{[^}]+\}")
+
+def filter_markers(text):
+    """Remove markers enclosed in curly braces from text."""
+    return MARKER_PATTERN.sub("", text).strip()
+
 def extract_phoneme_durations(
     tg: textgrid.Textgrid,
     start_time: float,
@@ -18,7 +26,7 @@ def extract_phoneme_durations(
     sample_rate: int,
     hop_size: int,
 ) -> Optional[Tuple[list, list]]:
-    """Extract phoneme durations for the specified time range."""
+    """Extract phoneme durations for the specified time range, excluding markers."""
     phones_tier = tg.getTier("phones")
     if not phones_tier:
         return None, None
@@ -26,20 +34,22 @@ def extract_phoneme_durations(
     phones = []
     durations = []
     total_frames = int((end_time - start_time) * sample_rate / hop_size) + 1
-    prev_end = start_time
 
     for phone_start, phone_end, phone_label in phones_tier.entries:
         # Only consider phones within the current utterance
         if phone_start < start_time or phone_end > end_time:
             continue
 
+        # Skip markers (spn or sil) for TTS training
+        if phone_label in {"spn", "sil"}:
+            continue
+
         # Add the current phone
         phones.append(phone_label)
         phone_duration = int((phone_end - phone_start) * sample_rate / hop_size)
         durations.append(phone_duration)
-        prev_end = phone_end
 
-    # Check if there are any durations
+    # Check if there are any valid durations
     if not durations:
         return None, None
 
@@ -133,6 +143,8 @@ def create_stage2_data(
             continue
 
         for i, (start, end, text) in enumerate(utterances_tier.entries):
+            # Remove markers from the text
+            text = filter_markers(text)
             if not text.strip():
                 continue
 
