@@ -107,7 +107,7 @@ git submodule update --init
 
 # Install ESPnet and required packages
 pip install -e ".[tts]" # Install TTS dependencies
-pip install kaldiio torchaudio praatio sox
+pip install kaldiio torchaudio praatio sox tensorboard
 ```
 
 ### 1.7. Symlink Directories
@@ -126,6 +126,14 @@ ESPnet expects `split_data.sh` in the `utils/` directory, so create a symbolic l
 
 ```bash
 ln -s /workspace/espnet/utils/data/split_data.sh /workspace/espnet/utils/split_data.sh
+```
+
+### 1.9 Installation of Cython
+
+Run this command:
+
+```bash
+cd /workspace/espnet/espnet2/gan_tts/vits/monotonic_align; python setup.py build_ext --inplace
 ```
 
 ## 2. Data Preparation
@@ -173,7 +181,7 @@ To leverage the multi-speaker capability of VITS, we’ll enable speaker embeddi
 Run the following command to initiate speaker embedding extraction and set Kaldi as the embedding tool:
 
 ```bash
-./run.sh --stage 2 --stop-stage 3 --use_spk_embed true --spk_embed_tool kaldi --use_sid true --ngpu <no of GPUs>
+./run.sh --stage 2 --stop-stage 3 --use_spk_embed true --spk_embed_tool kaldi --use_sid true --nj <no_of_cpus>
 ```
 
 Explanation of flags:
@@ -182,28 +190,14 @@ Explanation of flags:
 - `--spk_embed_tool kaldi`: Specifies Kaldi as the tool for x-vector embedding extraction, utilizing pre-trained x-vector embeddings.
 - `--use_sid true`: Assigns a unique Speaker ID (SID) to each speaker, helping the model distinguish between them.
 
-### 3.2. Using the Pre-trained VCTK VITS Model as Starting Point
-
-Download the pre-trained VCTK VITS model to use as an initialization point for training:
-
-```bash
-cd egs2/vctk/tts1
-wget https://zenodo.org/record/5500759/files/tts_train_multi_spk_vits_raw_phn_tacotron_g2p_en_no_space_train.total_count.ave.zip?download=1 -O pretrained_vctk_vits.zip
-
-# Unzip and place the model in the `exp/` directory
-unzip pretrained_vctk_vits.zip -d exp/pretrained_vctk_vits
-```
-
-The model's pth file will be accessible at `exp/pretrained_vctk_vits/exp/tts_train_multi_spk_vits_raw_phn_tacotron_g2p_en_no_space/train.total_count.ave_10best.pth`
-
 ## 4. Training the VITS Model
 
 Run the VITS training steps with speaker embeddings and the pre-trained model configuration:
 
 ```bash
-./run.sh --stage 4 --stop-stage 6 \
-    --tag finetune_vits_xvector_maltese \
-    --train_args "--init_param path/to/model.pth:tts:tts" \
+./run.sh --stage 4 --stop-stage 7 \
+    --tag vits_xvector_maltese \
+    --nj <no_of_cpus> \
     --ngpu <gpus_count>
 ```
 
