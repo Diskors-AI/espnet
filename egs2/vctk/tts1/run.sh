@@ -44,6 +44,7 @@ inference_config=conf/tuning/decode_vits.yaml
     --use_spk_embed true \
     --spk_embed_tool kaldi \
     --spk_embed_tag xvector \
+    --use_sid true \
     --train_config "${train_config}" \
     --inference_config "${inference_config}" \
     --train_set "${train_set}" \
