@@ -19,11 +19,9 @@ Ensure the following directory structure in your workspace:
         └── alignments/ # MFA TextGrid alignments
 ```
 
-### 1.2. Install Required Locales and Dependencies
+### 1.2. Install Required Locales
 
-Install UTF-8 Locales
-
-To handle Maltese characters:
+To handle UTF-8 encoding for Maltese characters:
 
 ```bash
 apt-get install locales
@@ -31,9 +29,60 @@ locale-gen en_US.UTF-8
 update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
 ```
 
-#### Install Python Requirements
+### 1.3. Install Vim
 
-Clone the forked ESPnet repository, pull the latest changes from the main ESPnet repo, and install the required packages:
+Install Vim as a text editor, which may be helpful for editing configuration files:
+
+```bash
+apt-get install vim
+```
+
+### 1.4. Install Sox
+
+Sox is required for audio processing. Install it using:
+
+```bash
+apt-get install sox
+```
+
+### 1.5. Install Kaldi
+
+To install Kaldi, clone the Kaldi repository, and follow the installation steps:
+
+```bash
+# Clone the Kaldi repository
+git clone https://github.com/kaldi-asr/kaldi.git /workspace/espnet/tools/kaldi
+
+# Navigate to the Kaldi tools directory and run the installation script
+cd /workspace/espnet/tools/kaldi/tools
+extras/check_dependencies.sh  # Check for required dependencies
+make -j $(nproc)  # Install Kaldi tools
+
+# Navigate to the Kaldi source directory to build Kaldi
+cd ../src
+./configure --shared
+make depend -j $(nproc)
+make -j $(nproc)
+```
+
+Ensure the Kaldi binaries are in your path:
+
+```bash
+export PATH=$PATH:/workspace/espnet/tools/kaldi/src/featbin
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/workspace/espnet/tools/kaldi/src/lib
+```
+
+After installation, run the following command to ensure that wav-to-duration - a required tool using during speaker embedding extraction - is properly linked:
+
+```bash
+ldd /workspace/espnet/tools/kaldi/src/featbin/wav-to-duration
+```
+
+### 1.6. Install Python Requirements
+
+Clone the ESPnet repository and install Python requirements.
+
+#### Clone ESPnet Repository and Pull Latest Changes
 
 ```bash
 # Clone the forked ESPnet repository
@@ -44,20 +93,24 @@ cd espnet
 git remote add upstream https://github.com/espnet/espnet.git
 git fetch upstream
 git merge upstream/main
+```
 
-# Create a venv if it does not exist yet.
+#### Install ESPnet Dependencies
+
+```bash
+# Create a virtual environment and activate it
 pyenv virtualenv espnet
 pyenv activate espnet
 
 # Initialize submodules
 git submodule update --init
 
-# Install Python requirements
+# Install ESPnet and required packages
 pip install -e ".[tts]" # Install TTS dependencies
-pip install kaldiio torchaudio
+pip install kaldiio torchaudio praatio sox
 ```
 
-#### Symlink Directories
+### 1.7. Symlink Directories
 
 Link the data, dump, and exp directories in the ESPnet setup:
 
@@ -65,6 +118,14 @@ Link the data, dump, and exp directories in the ESPnet setup:
 ln -s /workspace/data /workspace/espnet/egs2/vctk/tts1/data
 ln -s /workspace/dump /workspace/espnet/egs2/vctk/tts1/dump
 ln -s /workspace/exp /workspace/espnet/egs2/vctk/tts1/exp
+```
+
+### 1.8. Symlink for split_data.sh
+
+ESPnet expects `split_data.sh` in the `utils/` directory, so create a symbolic link from `utils/data/split_data.sh` to `utils/split_data.sh`:
+
+```bash
+ln -s /workspace/espnet/utils/data/split_data.sh /workspace/espnet/utils/split_data.sh
 ```
 
 ## 2. Data Preparation
@@ -112,7 +173,7 @@ To leverage the multi-speaker capability of VITS, we’ll enable speaker embeddi
 Run the following command to initiate speaker embedding extraction and set Kaldi as the embedding tool:
 
 ```bash
-./run.sh --stage 2 --stop-stage 3 --use_spk_embed true --spk_embed_tool kaldi --use_sid true
+./run.sh --stage 2 --stop-stage 3 --use_spk_embed true --spk_embed_tool kaldi --use_sid true --ngpu <no of GPUs>
 ```
 
 Explanation of flags:
@@ -141,11 +202,9 @@ Run the VITS training steps with speaker embeddings and the pre-trained model co
 
 ```bash
 ./run.sh --stage 4 --stop-stage 6 \
-    --train_config conf/tuning/train_xvector_vits.yaml \
-    --use_xvector true \
-    --xvector_dir data/train/xvector.scp \
-    --train_args "--init_param /path/to/pretrained_model.pth:tts:tts" \
-    --tag finetune_vits_xvector_maltese
+    --tag finetune_vits_xvector_maltese \
+    --train_args "--init_param path/to/model.pth:tts:tts" \
+    --ngpu <gpus_count>
 ```
 
 ### 4.1. Monitor Training Progress
