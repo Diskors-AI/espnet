@@ -8,6 +8,7 @@ _punctuation_re = re.compile(r"([,;:.!?()])")
 _quotes_re = re.compile(r'["]')
 _sound_markers_re = re.compile(r"\{[^}]+\}")
 _mid_word_quotes_re = re.compile(r'(\w)-"([^"]+)"')
+_parentheses_brackets_re = re.compile(r"[\[\]\(\)]")
 
 
 # Maltese-specific cleaner
@@ -22,6 +23,7 @@ def clean(text):
     text = remove_sound_markers(text)
     text = remove_mid_word_quotes(text)
 
+    text = remove_parentheses_and_brackets(text)
     text = separate_punctuation(text)
     text = collapse_whitespace(text)
     text = lowercase(text)
@@ -66,6 +68,18 @@ def remove_mid_word_quotes(text):
     # Remove double quotes only when they appear in the middle of a unit, e.g., between a hyphen or surrounding an article
     # like, for example, il-"Materjal Sedizzjuż".
     return _mid_word_quotes_re.sub(r"\1-\2", text)
+
+def remove_parentheses_and_brackets(text):
+    """
+    Removes only parentheses and brackets from the text.
+
+    Parameters:
+    - text (str): The input text to be cleaned.
+
+    Returns:
+    - str: The cleaned text with parentheses and brackets removed.
+    """
+    return _parentheses_brackets_re.sub("", text)
 
 
 def test_with_textgrids(folder_path, output_file_path):
