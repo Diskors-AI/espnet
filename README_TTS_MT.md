@@ -107,7 +107,7 @@ git submodule update --init
 
 # Install ESPnet and required packages
 pip install -e ".[tts]" # Install TTS dependencies
-pip install kaldiio torchaudio praatio sox tensorboard
+pip install kaldiio torchaudio praatio sox tensorboard matplotlib
 ```
 
 ### 1.7. Symlink Directories
