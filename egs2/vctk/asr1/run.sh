@@ -7,9 +7,9 @@ set -o pipefail
 
 # if ture, speaker open setting will be used.
 use_speakeropen=true
-train_set=tr_no_dev
+train_set=train
 valid_set=dev
-test_sets="dev eval1"
+test_sets="eval eval_noisy eval_low_quality"
 
 token_type=char
 
@@ -21,10 +21,10 @@ inference_config=conf/decode_asr.yaml
 speed_perturb_factors="1.1 0.9 1.0"
 
 ./asr.sh \
-    --ngpu 4 \
+    --ngpu 1 \
     --token_type "${token_type}" \
     --feats_type raw \
-    --fs 16k \
+    --fs 22050 \
     --local_data_opts "--use_speakeropen ${use_speakeropen}" \
     --train_set "${train_set}" \
     --valid_set "${valid_set}" \
