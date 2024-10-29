@@ -164,14 +164,6 @@ Validate the prepared data:
 ./utils/validate_data_dir.sh --no-feats /workspace/data/eval1
 ```
 
-### 2.4. Prepare Phoneme Data
-
-Create phoneme data for each dataset (train, dev, eval):
-
-```bash
-./utils/mfa_prep_stage2_phoneme_data.sh /workspace/data
-```
-
 ## 3. Setting Up VITS with Speaker Embeddings
 
 ### 3.1. Enabling Speaker Embeddings and IDs
