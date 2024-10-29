@@ -5,19 +5,23 @@ from praatio import textgrid
 import soundfile as sf
 from collections import defaultdict
 import random
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Dict, List
 
 train_dir_name = "tr_no_dev"
 dev_dir_name = "dev"
 test_dir_name = "eval1"
-
+train_dir_name_phn = "tr_no_dev_phn"
+dev_dir_name_phn = "dev_phn"
+test_dir_name_phn = "eval1_phn"
 
 # Define regex to match markers such as {laugh}, {cough}, etc.
 MARKER_PATTERN = re.compile(r"\{[^}]+\}")
 
+
 def filter_markers(text):
     """Remove markers enclosed in curly braces from text."""
     return MARKER_PATTERN.sub("", text).strip()
+
 
 def extract_phoneme_durations(
     tg: textgrid.Textgrid,
@@ -25,7 +29,7 @@ def extract_phoneme_durations(
     end_time: float,
     sample_rate: int,
     hop_size: int,
-) -> Optional[Tuple[list, list]]:
+) -> Optional[Tuple[List[str], List[int]]]:
     """Extract phoneme durations for the specified time range, excluding markers."""
     phones_tier = tg.getTier("phones")
     if not phones_tier:
@@ -36,92 +40,94 @@ def extract_phoneme_durations(
     total_frames = int((end_time - start_time) * sample_rate / hop_size) + 1
 
     for phone_start, phone_end, phone_label in phones_tier.entries:
-        # Only consider phones within the current utterance
         if phone_start < start_time or phone_end > end_time:
             continue
-
-        # Skip markers (spn or sil) for TTS training
-        if phone_label in {"spn", "sil"}:
+        if phone_label in {"spn", "sil", ""}:
             continue
-
-        # Add the current phone
         phones.append(phone_label)
         phone_duration = int((phone_end - phone_start) * sample_rate / hop_size)
         durations.append(phone_duration)
 
-    # Check if there are any valid durations
     if not durations:
         return None, None
 
-    # Adjust last duration to match total frames if needed
     if sum(durations) < total_frames:
         durations[-1] += total_frames - sum(durations)
 
     return phones, durations
 
 
-def create_stage2_data(
-    alignments_dir: str, corpus_dir: str, output_dir: str, hop_size: int = 256
-) -> None:
-    """
-    Create the necessary data structure for ESPnet stage 2 using TextGrid alignments
-    and audio files.
-    """
+def add_entry(
+    data_entries,
+    set_name,
+    basename,
+    wav_path,
+    segment_id,
+    text,
+    phones,
+    phone_durations,
+    speaker,
+    start,
+    end,
+):
+    """Add entries for both text and phoneme sets."""
+    if basename not in [entry[0] for entry in data_entries[set_name]["wav_scp"]]:
+        data_entries[set_name]["wav_scp"].append((basename, wav_path))
+        data_entries[f"{set_name}_phn"]["wav_scp"].append((basename, wav_path))
 
+    # Add text and phoneme-based entries
+    data_entries[set_name]["text"].append((segment_id, text))
+    data_entries[f"{set_name}_phn"]["text"].append((segment_id, " ".join(phones)))
+    data_entries[set_name]["segments"].append((segment_id, basename, start, end))
+    data_entries[f"{set_name}_phn"]["segments"].append(
+        (segment_id, basename, start, end)
+    )
+    data_entries[set_name]["durations"].append(
+        (segment_id, " ".join(map(str, phone_durations)))
+    )
+    data_entries[f"{set_name}_phn"]["durations"].append(
+        (segment_id, " ".join(map(str, phone_durations)))
+    )
+    data_entries[set_name]["utt2spk"].append((segment_id, speaker))
+    data_entries[f"{set_name}_phn"]["utt2spk"].append((segment_id, speaker))
+    data_entries[set_name]["spk2utt"][speaker].append(segment_id)
+    data_entries[f"{set_name}_phn"]["spk2utt"][speaker].append(segment_id)
+
+
+def gather_data(
+    alignments_dir: str,
+    corpus_dir: str,
+    hop_size: int = 256,
+    data_percentage: float = 1.0,
+) -> Dict[str, Dict[str, List]]:
+    """Gather data for each set (train, dev, test) into in-memory structures for both text and phoneme folders."""
     alignments_dir = Path(alignments_dir)
     corpus_dir = Path(corpus_dir)
-    output_dir = Path(output_dir)
 
-    # Create output directories if they do not exist
-    train_dir = output_dir / train_dir_name
-    dev_dir = output_dir / dev_dir_name
-    test_dir = output_dir / test_dir_name
-    for d in [train_dir, dev_dir, test_dir]:
-        d.mkdir(parents=True, exist_ok=True)
-
-    # In-memory data structures to track what's written
-    written_entries = {
-        train_dir_name: {"wav_scp": set(), "text": set()},
-        dev_dir_name: {"wav_scp": set(), "text": set()},
-        test_dir_name: {"wav_scp": set(), "text": set()},
+    data_entries = {
+        name: {
+            "wav_scp": [],
+            "text": [],
+            "segments": [],
+            "durations": [],
+            "utt2spk": [],
+            "spk2utt": defaultdict(list),
+        }
+        for name in [
+            train_dir_name,
+            dev_dir_name,
+            test_dir_name,
+            train_dir_name_phn,
+            dev_dir_name_phn,
+            test_dir_name_phn,
+        ]
     }
 
-    # Dictionary to hold utt2spk and spk2utt
-    utt2spk_dict = defaultdict(dict)  # Stores utt2spk mappings for each set
-    spk2utt_dict = defaultdict(
-        lambda: defaultdict(list)
-    )  # Stores spk2utt mappings for each set
+    all_textgrids = sorted(alignments_dir.glob("*.TextGrid"))
+    subset_size = int(len(all_textgrids) * data_percentage)
+    selected_textgrids = random.sample(all_textgrids, subset_size)
 
-    # Open output files for each set
-    files = {
-        train_dir_name: {
-            "wav_scp": open(train_dir / "wav.scp", "w"),
-            "text": open(train_dir / "text", "w"),
-            "segments": open(train_dir / "segments", "w"),
-            "durations": open(train_dir / "durations", "w"),
-            "utt2spk": open(train_dir / "utt2spk", "w"),
-            "spk2utt": open(train_dir / "spk2utt", "w"),
-        },
-        dev_dir_name: {
-            "wav_scp": open(dev_dir / "wav.scp", "w"),
-            "text": open(dev_dir / "text", "w"),
-            "segments": open(dev_dir / "segments", "w"),
-            "durations": open(dev_dir / "durations", "w"),
-            "utt2spk": open(dev_dir / "utt2spk", "w"),
-            "spk2utt": open(dev_dir / "spk2utt", "w"),
-        },
-        test_dir_name: {
-            "wav_scp": open(test_dir / "wav.scp", "w"),
-            "text": open(test_dir / "text", "w"),
-            "segments": open(test_dir / "segments", "w"),
-            "durations": open(test_dir / "durations", "w"),
-            "utt2spk": open(test_dir / "utt2spk", "w"),
-            "spk2utt": open(test_dir / "spk2utt", "w"),
-        },
-    }
-
-    # Process each TextGrid file
-    for tg_path in sorted(alignments_dir.glob("*.TextGrid")):
+    for tg_path in selected_textgrids:
         tg = textgrid.openTextgrid(tg_path, includeEmptyIntervals=True)
         basename = tg_path.stem
         wav_path = corpus_dir / f"{basename}.wav"
@@ -143,12 +149,8 @@ def create_stage2_data(
             continue
 
         for i, (start, end, text) in enumerate(utterances_tier.entries):
-            # Remove markers from the text
             text = filter_markers(text)
-            if not text.strip():
-                continue
-
-            if start >= duration or end > duration + 1e-3:
+            if not text.strip() or start >= duration or end > duration + 1e-3:
                 continue
 
             segment_id = f"{basename}_{i:04d}"
@@ -157,12 +159,9 @@ def create_stage2_data(
             )
 
             if phones is None or phone_durations is None:
-                print(
-                    f"Skipping {segment_id} due to missing phoneme information. Text: {text}, Start: {start}, End: {end}"
-                )
+                print(f"Skipping {segment_id} due to missing phoneme information.")
                 continue
 
-            # Randomly assign to tr_no_dev/dev/eval1
             rnd = random.randint(1, 100)
             if rnd <= 80:
                 set_name = train_dir_name
@@ -171,37 +170,71 @@ def create_stage2_data(
             else:
                 set_name = test_dir_name
 
-            # Ensure not to write duplicates
-            if basename not in written_entries[set_name]["wav_scp"]:
-                files[set_name]["wav_scp"].write(f"{basename} {wav_path}\n")
-                written_entries[set_name]["wav_scp"].add(basename)
-
-            files[set_name]["text"].write(f"{segment_id} {text}\n")
-            files[set_name]["segments"].write(
-                f"{segment_id} {basename} {start} {end}\n"
+            # Add entries for both text and phoneme sets
+            add_entry(
+                data_entries,
+                set_name,
+                basename,
+                wav_path,
+                segment_id,
+                text,
+                phones,
+                phone_durations,
+                speaker,
+                start,
+                end,
             )
-            files[set_name]["durations"].write(
-                f"{segment_id} {' '.join(map(str, phone_durations))}\n"
-            )
 
-            # Track utt2spk and spk2utt in-memory for consistency
-            utt2spk_dict[set_name][segment_id] = speaker
-            spk2utt_dict[set_name][speaker].append(segment_id)
+    return data_entries
 
-    # Write utt2spk and spk2utt for each set
-    for set_name, f in files.items():
-        for utt, speaker in utt2spk_dict[set_name].items():
-            f["utt2spk"].write(f"{utt} {speaker}\n")
 
-        for speaker, utts in spk2utt_dict[set_name].items():
-            f["spk2utt"].write(f"{speaker} {' '.join(sorted(utts))}\n")
+def write_data(data_entries: Dict[str, Dict[str, List]], output_dir: str) -> None:
+    """Write the gathered data to files in the specified output directory."""
+    output_dir = Path(output_dir)
 
-    # Close all files
-    for set_name in files:
-        for file in files[set_name].values():
-            file.close()
+    for set_name, entries in data_entries.items():
+        set_dir = output_dir / set_name
+        set_dir.mkdir(parents=True, exist_ok=True)
+
+        with (
+            open(set_dir / "wav.scp", "w") as wav_scp,
+            open(set_dir / "text", "w") as text,
+            open(set_dir / "segments", "w") as segments,
+            open(set_dir / "durations", "w") as durations,
+            open(set_dir / "utt2spk", "w") as utt2spk,
+            open(set_dir / "spk2utt", "w") as spk2utt,
+        ):
+            for basename, wav_path in sorted(entries["wav_scp"]):
+                wav_scp.write(f"{basename} {wav_path}\n")
+            for segment_id, text_content in sorted(entries["text"]):
+                text.write(f"{segment_id} {text_content}\n")
+            for segment_id, basename, start, end in sorted(entries["segments"]):
+                segments.write(f"{segment_id} {basename} {start} {end}\n")
+            for segment_id, duration in sorted(entries["durations"]):
+                durations.write(f"{segment_id} {duration}\n")
+            for segment_id, speaker in sorted(entries["utt2spk"]):
+                utt2spk.write(f"{segment_id} {speaker}\n")
+            for speaker, utts in sorted(entries["spk2utt"].items()):
+                spk2utt.write(f"{speaker} {' '.join(sorted(utts))}\n")
 
     print(f"Data preparation completed. Files saved to {output_dir}")
+
+
+def create_stage2_data(
+    alignments_dir: str,
+    corpus_dir: str,
+    output_dir: str,
+    hop_size: int = 256,
+    data_percentage: float = 1.0,
+) -> None:
+    """Full process of gathering data and writing it to files."""
+    data_entries = gather_data(
+        alignments_dir=alignments_dir,
+        corpus_dir=corpus_dir,
+        hop_size=hop_size,
+        data_percentage=data_percentage,
+    )
+    write_data(data_entries, output_dir)
 
 
 if __name__ == "__main__":
@@ -229,6 +262,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--hop_size", type=int, default=256, help="Hop size for STFT (default: 256)."
     )
+    parser.add_argument(
+        "--data_percentage",
+        type=float,
+        default=1.0,
+        help="Percentage of the data to use for training (0.0 < p <= 1.0).",
+    )
 
     args = parser.parse_args()
 
@@ -237,4 +276,5 @@ if __name__ == "__main__":
         corpus_dir=args.corpus_dir,
         output_dir=args.output_dir,
         hop_size=args.hop_size,
+        data_percentage=args.data_percentage,
     )
