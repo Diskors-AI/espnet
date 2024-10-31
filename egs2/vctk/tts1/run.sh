@@ -42,6 +42,7 @@ inference_config=conf/tuning/decode_vits.yaml
     --g2p "${g2p}" \
     --tts_task gan_tts \
     --use_spk_embed true \
+    --use_sid true \
     --spk_embed_tool kaldi \
     --spk_embed_tag xvector \
     --use_sid true \
