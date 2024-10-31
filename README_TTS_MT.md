@@ -187,10 +187,10 @@ Explanation of flags:
 Run the VITS training steps with speaker embeddings and the pre-trained model configuration:
 
 ```bash
-./run.sh --stage 4 --stop-stage 7 \
+nohup ./run.sh --stage 4 --stop-stage 7 \
     --tag vits_xvector_maltese \
     --nj <no_of_cpus> \
-    --ngpu <gpus_count>
+    --ngpu <gpus_count> > nohup.out 2>&1 &
 ```
 
 ### 4.1. Monitor Training Progress
