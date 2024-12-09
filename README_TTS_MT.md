@@ -1,6 +1,16 @@
 # TTS Training Workflow for VITS
 
-This flow provides step-by-step instructions for setting up and training a Text-to-Speech (TTS) model using ESPnet with the VITS architecture. It assumes that you already have a WAV corpus aligned using the Montreal Forced Aligner (MFA) and that the corresponding TextGrid files have been generated. The aligned data will be used to prepare training data, extract speaker embeddings, and train the VITS TTS model.
+This guide provides a step-by-step workflow for setting up and training a Text-to-Speech (TTS) model using ESPnet’s VITS architecture. It assumes you have already aligned your WAV corpus using the Montreal Forced Aligner (MFA) and have generated corresponding TextGrid files.
+
+The process includes:
+
+1. Setting up the environment and installing dependencies.
+2. Preparing data from MFA alignments.
+3. Extracting speaker embeddings for multi-speaker scenarios.
+4. Training the VITS model.
+5. Performing inference and evaluation.
+
+This workflow enables you to experiment with different configurations while reusing previously prepared data and speaker embeddings, thus allowing rapid iteration without rerunning all preprocessing steps.
 
 ## 1. Initial Setup
 
@@ -21,7 +31,7 @@ Ensure the following directory structure in your workspace:
 
 ### 1.2. Install Required Locales
 
-To handle UTF-8 encoding for Maltese characters:
+If your language involves special characters (e.g., Maltese), install and configure locales:
 
 ```bash
 apt-get install locales
@@ -47,7 +57,7 @@ apt-get install sox
 
 ### 1.5. Install Kaldi
 
-To install Kaldi, clone the Kaldi repository, and follow the installation steps:
+Install Kaldi inside the ESPnet tools directory:
 
 ```bash
 # Clone the Kaldi repository
@@ -65,14 +75,14 @@ make depend -j $(nproc)
 make -j $(nproc)
 ```
 
-Ensure the Kaldi binaries are in your path:
+Add Kaldi binaries to your PATH:
 
 ```bash
 export PATH=$PATH:/workspace/espnet/tools/kaldi/src/featbin
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/workspace/espnet/tools/kaldi/src/lib
 ```
 
-After installation, run the following command to ensure that wav-to-duration - a required tool using during speaker embedding extraction - is properly linked:
+Verify wav-to-duration is correctly linked:
 
 ```bash
 ldd /workspace/espnet/tools/kaldi/src/featbin/wav-to-duration
@@ -80,39 +90,30 @@ ldd /workspace/espnet/tools/kaldi/src/featbin/wav-to-duration
 
 ### 1.6. Install Python Requirements
 
-Clone the ESPnet repository and install Python requirements.
-
-#### Clone ESPnet Repository and Pull Latest Changes
+Clone the ESPnet repository, set up a Python environment, and install dependencies.
 
 ```bash
-# Clone the forked ESPnet repository
+cd /workspace
 git clone https://github.com/Diskors-AI/espnet.git
 cd espnet
 
-# Pull the latest changes from the main ESPnet repository
+# Update from main ESPnet repository
 git remote add upstream https://github.com/espnet/espnet.git
 git fetch upstream
 git merge upstream/main
-```
 
-#### Install ESPnet Dependencies
-
-```bash
-# Create a virtual environment and activate it
+# Setup Python environment (example using pyenv)
 pyenv virtualenv espnet
 pyenv activate espnet
 
-# Initialize submodules
 git submodule update --init
-
-# Install ESPnet and required packages
-pip install -e ".[tts]" # Install TTS dependencies
+pip install -e ".[tts]"
 pip install kaldiio torchaudio praatio sox tensorboard matplotlib
 ```
 
-### 1.7. Symlink Directories
+### 1.7. Symlink Data, Dump, and Exp Directories
 
-Link the data, dump, and exp directories in the ESPnet setup:
+Link your main data directories into the ESPnet example recipe directory (here, using vctk/tts1 as an example):
 
 ```bash
 ln -s /workspace/data /workspace/espnet/egs2/vctk/tts1/data
@@ -122,15 +123,15 @@ ln -s /workspace/exp /workspace/espnet/egs2/vctk/tts1/exp
 
 ### 1.8. Symlink for split_data.sh
 
-ESPnet expects `split_data.sh` in the `utils/` directory, so create a symbolic link from `utils/data/split_data.sh` to `utils/split_data.sh`:
+ESPnet expects `split_data.sh` in `utils/`:
 
 ```bash
 ln -s /workspace/espnet/utils/data/split_data.sh /workspace/espnet/utils/split_data.sh
 ```
 
-### 1.9 Installation of Cython
+### 1.9 Install Cython Extensions for VITS
 
-Run this command:
+Build the monotonic alignment extension for VITS:
 
 ```bash
 cd /workspace/espnet/espnet2/gan_tts/vits/monotonic_align; python setup.py build_ext --inplace
@@ -140,37 +141,42 @@ cd /workspace/espnet/espnet2/gan_tts/vits/monotonic_align; python setup.py build
 
 ### 2.1. Downsampling Audio
 
-Downsample WAV files from 44100 Hz to 22050 Hz if necessary, and convert to Mono, for optimal TTS performance.
+If your audio is not already at 22050 Hz mono, downsample and convert it before proceeding.
 
 ### 2.2. Prepare Data from MFA Alignments
 
 **Relative Path**: egs2/vctk/tts1/pyscripts/utils
 
-Use MFA alignments to prepare data for ESPnet. Each TextGrid file should contain three tiers: words, phones, and utterances.
+Use the MFA-produced TextGrid alignments to generate training data lists and transcription files. Each TextGrid file should contain three tiers: words, phones, and utterances:
 
 ```bash
-python mfa_prep_stage2_data.py --alignments_dir /workspace/data/corpus/alignments --corpus_dir /workspace/data/corpus/wav --output_dir /workspace/data
+python mfa_prep_stage2_data.py \
+    --alignments_dir /workspace/data/corpus/alignments \
+    --corpus_dir /workspace/data/corpus/wav \
+    --output_dir /workspace/data \
+    --data_percentage 1.0
 ```
 
 ### 2.3. Validate Data
 
 **Relative Path**: egs2/vctk/tts1
 
-Validate the prepared data:
+Run validation checks to ensure data directories are correct:
 
 ```bash
 ./utils/validate_data_dir.sh --no-feats /workspace/data/tr_no_dev
 ./utils/validate_data_dir.sh --no-feats /workspace/data/dev
 ./utils/validate_data_dir.sh --no-feats /workspace/data/eval1
+./utils/validate_data_dir.sh --no-feats /workspace/data/tr_no_dev_phn
+./utils/validate_data_dir.sh --no-feats /workspace/data/dev_phn
+./utils/validate_data_dir.sh --no-feats /workspace/data/eval1_phn
 ```
 
 ## 3. Setting Up VITS with Speaker Embeddings
 
 ### 3.1. Enabling Speaker Embeddings and IDs
 
-To leverage the multi-speaker capability of VITS, we’ll enable speaker embeddings with Kaldi for x-vector extraction and ensure each speaker has a unique identifier (SID). Additionally, enabling GST (Global Style Tokens) is optional but beneficial if the dataset includes varied speaking styles.
-
-Run the following command to initiate speaker embedding extraction and set Kaldi as the embedding tool:
+For multi-speaker training, enable speaker embeddings and assign unique speaker IDs (SIDs). If using x-vectors from Kaldi:
 
 ```bash
 ./run.sh --stage 2 --stop-stage 3 --use_spk_embed true --spk_embed_tool kaldi --use_sid true --nj <no_of_cpus>
@@ -184,29 +190,62 @@ Explanation of flags:
 
 ## 4. Training the VITS Model
 
-Run the VITS training steps with speaker embeddings and the pre-trained model configuration:
+### 4.1 Data Prepartion
+
+Before training, run the steps needed to generate statistics and other prerequisites:
 
 ```bash
-nohup ./run.sh --stage 4 --stop-stage 7 \
+nohup ./run.sh --stage 4 --stop-stage 6 \
     --tag vits_xvector_maltese \
     --nj <no_of_cpus> \
     --ngpu <gpus_count> > nohup.out 2>&1 &
 ```
 
-### 4.1. Monitor Training Progress
+Usually, once you have run these steps and generated `exp/tts_stats_raw_phn_maltese_none` and `exp/xvector_nnet_1a`, you can reuse them for multiple experiments without re-running earlier stages. The exception is if you change data representation parameters (e.g., Mel filters, FFT size, hop length, or phoneme tokenization), in which case you must re-run from the appropriate earlier stage to regenerate consistent data.
 
-Check logs for validation and training metrics:
+### 4.2. Train Models Using A Configuration
 
-#### Monitor training logs
+To find an optimal configuration that leads to stable diagonal attention alignments and improved model generalization, you may need to train multiple times using different YAML configuration files. Each configuration can adjust training parameters—such as dropout rates, learning rates, or model architecture details—to refine the model’s performance.
+
+Because the data preparation steps (stages 1–6) have already been completed, you can start each new experimental run directly from stage 7. This allows you to reuse the previously generated features and speaker embeddings without repeating the entire data processing pipeline. Simply modify the paths and parameters below as needed:
 
 ```bash
-tail -f exp/pretrained_vctk_vits/log/train.log
+nohup ./run.sh --stage 7 --stop-stage 7 \
+    --use_spk_embed true --spk_embed_tool kaldi --use_sid true \
+    --train_config path/to/train/config.yaml \
+    --tag <experiment tag> \
+    --nj <no_of_cpus> \
+    --ngpu <gpus_count> > nohup.out 2>&1 &
+```
+
+- `--train_config` specifies the configuration file you wish to experiment with.
+- `--tag` allows you to label each run distinctly.
+- `--nj` sets the number of CPU jobs and
+- `--ngpu` sets the number of GPUs to use.
+
+After running this command, monitor the results, including the attention plots, to determine whether the configuration yields the desired diagonal alignment and overall stability. If not, adjust your configuration and rerun the training until you achieve the optimal setup.
+
+#### Log Monitoring:
+
+```bash
+tail -f exp/<experiment tag>/train.log
 ```
 
 ## 5. Inference and Evaluation
 
-After training, run inference to test the model:
+After training, run inference to generate synthetic speech and evaluate results:
 
 ```bash
 ./run.sh --stage 7 --stop-stage 8 --inference-config conf/decode.yaml --inference_tag test_with_vits
 ```
+
+Use the generated outputs to assess audio quality and attention alignment, refining configurations as necessary in subsequent training runs.
+
+**In summary:**
+
+- You set up the environment and dependencies once.
+- Data preparation and feature extraction steps (stages 1–6) need only be re-run if you change how data is represented.
+- Model training (stage 7) can be repeated with different configurations to improve model quality.
+- Inference (stage 8) allows you to validate model performance and guide further refinements.
+
+This process streamlines experimentation, letting you quickly iterate toward a stable, high-quality VITS-based TTS model.
