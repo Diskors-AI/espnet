@@ -55,7 +55,32 @@ Sox is required for audio processing. Install it using:
 apt-get install sox
 ```
 
-### 1.5. Install Kaldi
+### 1.5. Install Python Requirements
+
+Clone the ESPnet repository, set up a Python environment, and install dependencies.
+
+```bash
+cd /workspace
+git clone https://github.com/Diskors-AI/espnet.git
+cd espnet
+
+# Update from main ESPnet repository
+git remote add upstream https://github.com/espnet/espnet.git
+git fetch upstream
+git merge upstream/master
+
+# Setup Python environment (example using pyenv)
+pyenv virtualenv espnet
+pyenv activate espnet
+
+git submodule update --init
+pip install -e ".[tts]"
+pip install kaldiio torchaudio praatio sox tensorboard matplotlib
+pip install wheel
+pip install flash_attn
+```
+
+### 1.6. Install Kaldi
 
 Install Kaldi inside the ESPnet tools directory:
 
@@ -67,10 +92,13 @@ git clone https://github.com/kaldi-asr/kaldi.git /workspace/espnet/tools/kaldi
 cd /workspace/espnet/tools/kaldi/tools
 extras/check_dependencies.sh  # Check for required dependencies
 make -j $(nproc)  # Install Kaldi tools
+extras/install_openblas.sh # Install OpenBlas for Non-Intel CPUs
 
 # Navigate to the Kaldi source directory to build Kaldi
 cd ../src
-./configure --shared
+./configure --shared # For Intel CPUs
+or
+./configure --shared --mathlib=OPENBLAS # For non-Intel CPUs
 make depend -j $(nproc)
 make -j $(nproc)
 ```
@@ -88,29 +116,6 @@ Verify wav-to-duration is correctly linked:
 ldd /workspace/espnet/tools/kaldi/src/featbin/wav-to-duration
 ```
 
-### 1.6. Install Python Requirements
-
-Clone the ESPnet repository, set up a Python environment, and install dependencies.
-
-```bash
-cd /workspace
-git clone https://github.com/Diskors-AI/espnet.git
-cd espnet
-
-# Update from main ESPnet repository
-git remote add upstream https://github.com/espnet/espnet.git
-git fetch upstream
-git merge upstream/main
-
-# Setup Python environment (example using pyenv)
-pyenv virtualenv espnet
-pyenv activate espnet
-
-git submodule update --init
-pip install -e ".[tts]"
-pip install kaldiio torchaudio praatio sox tensorboard matplotlib
-```
-
 ### 1.7. Symlink Data, Dump, and Exp Directories
 
 Link your main data directories into the ESPnet example recipe directory (here, using vctk/tts1 as an example):
@@ -126,7 +131,10 @@ ln -s /workspace/exp /workspace/espnet/egs2/vctk/tts1/exp
 ESPnet expects `split_data.sh` in `utils/`:
 
 ```bash
+# This link did not work last time
 ln -s /workspace/espnet/utils/data/split_data.sh /workspace/espnet/utils/split_data.sh
+# I used this instead.
+ln -s /workspace/espnet/egs2/TEMPLATE/asr1/utils/data/split_data.sh utils/split_data.sh
 ```
 
 ### 1.9 Install Cython Extensions for VITS
@@ -179,7 +187,7 @@ Run validation checks to ensure data directories are correct:
 For multi-speaker training, enable speaker embeddings and assign unique speaker IDs (SIDs). If using x-vectors from Kaldi:
 
 ```bash
-./run.sh --stage 2 --stop-stage 3 --use_spk_embed true --spk_embed_tool kaldi --use_sid true --nj <no_of_cpus>
+./run.sh --stage 2 --stop-stage 3 --use_spk_embed true --spk_embed_tool kaldi --use_sid true --nj $(nproc)
 ```
 
 Explanation of flags:
@@ -197,7 +205,7 @@ Before training, run the steps needed to generate statistics and other prerequis
 ```bash
 nohup ./run.sh --stage 4 --stop-stage 6 \
     --tag vits_xvector_maltese \
-    --nj <no_of_cpus> \
+    --nj $(nproc) \
     --ngpu <gpus_count> > nohup.out 2>&1 &
 ```
 
@@ -214,7 +222,7 @@ nohup ./run.sh --stage 7 --stop-stage 7 \
     --use_spk_embed true --spk_embed_tool kaldi --use_sid true \
     --train_config path/to/train/config.yaml \
     --tag <experiment tag> \
-    --nj <no_of_cpus> \
+    --nj $(nproc) \
     --ngpu <gpus_count> > nohup.out 2>&1 &
 ```
 
