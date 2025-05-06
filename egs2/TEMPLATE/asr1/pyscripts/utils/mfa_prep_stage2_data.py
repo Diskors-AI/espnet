@@ -24,12 +24,8 @@ def filter_markers(text):
 
 
 def extract_phoneme_durations(
-    tg: textgrid.Textgrid,
-    start_time: float,
-    end_time: float,
-    sample_rate: int,
-    hop_size: int,
-) -> Optional[Tuple[List[str], List[int]]]:
+    tg: textgrid.Textgrid, start_time: float, end_time: float
+) -> Optional[Tuple[List[str], List[float]]]:
     """Extract phoneme durations for the specified time range, excluding markers."""
     phones_tier = tg.getTier("phones")
     if not phones_tier:
@@ -37,7 +33,6 @@ def extract_phoneme_durations(
 
     phones = []
     durations = []
-    total_frames = int((end_time - start_time) * sample_rate / hop_size) + 1
 
     for phone_start, phone_end, phone_label in phones_tier.entries:
         if phone_start < start_time or phone_end > end_time:
@@ -45,14 +40,12 @@ def extract_phoneme_durations(
         if phone_label in {"spn", "sil", ""}:
             continue
         phones.append(phone_label)
-        phone_duration = int((phone_end - phone_start) * sample_rate / hop_size)
+        # This calculates phone durations in seconds, as expected by ESPNet GAN VITS TTS training
+        phone_duration = phone_end - phone_start
         durations.append(phone_duration)
 
     if not durations:
         return None, None
-
-    if sum(durations) < total_frames:
-        durations[-1] += total_frames - sum(durations)
 
     return phones, durations
 
@@ -83,10 +76,10 @@ def add_entry(
         (segment_id, basename, start, end)
     )
     data_entries[set_name]["durations"].append(
-        (segment_id, " ".join(map(str, phone_durations)))
+        (segment_id, " ".join(f"{d:.6f}" for d in phone_durations))
     )
     data_entries[f"{set_name}_phn"]["durations"].append(
-        (segment_id, " ".join(map(str, phone_durations)))
+        (segment_id, " ".join(f"{d:.6f}" for d in phone_durations))
     )
     data_entries[set_name]["utt2spk"].append((segment_id, speaker))
     data_entries[f"{set_name}_phn"]["utt2spk"].append((segment_id, speaker))
@@ -154,9 +147,7 @@ def gather_data(
                 continue
 
             segment_id = f"{basename}_{i:04d}"
-            phones, phone_durations = extract_phoneme_durations(
-                tg, start, end, orig_sr, hop_size
-            )
+            phones, phone_durations = extract_phoneme_durations(tg, start, end)
 
             if phones is None or phone_durations is None:
                 print(f"Skipping {segment_id} due to missing phoneme information.")
