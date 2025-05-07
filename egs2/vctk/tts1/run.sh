@@ -26,6 +26,12 @@ valid_set=dev
 test_sets="dev eval1"
 g2p=none
 
+if [ "${token_type}" = phn ]; then
+    train_set=${train_set}_phn
+    valid_set=${valid_set}_phn
+    test_sets=${test_sets}_phn
+fi
+
 # Model configuration
 train_config=conf/tuning/train_xvector_vits.yaml
 inference_config=conf/tuning/decode_vits.yaml

@@ -34,6 +34,7 @@ Ensure the following directory structure in your workspace:
 If your language involves special characters (e.g., Maltese), install and configure locales:
 
 ```bash
+apt-get update
 apt-get install locales
 locale-gen en_US.UTF-8
 update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
@@ -47,12 +48,12 @@ Install Vim as a text editor, which may be helpful for editing configuration fil
 apt-get install vim
 ```
 
-### 1.4. Install Sox
+### 1.4. Install Sox and libgfortran5
 
-Sox is required for audio processing. Install it using:
+Sox is required for audio processing, and libgfortran5 is needed by Kaldi tools like wav-to-duration. Install them using:
 
 ```bash
-apt-get install sox
+apt-get install -y sox libgfortran5
 ```
 
 ### 1.5. Install Python Requirements
@@ -162,6 +163,7 @@ python mfa_prep_stage2_data.py \
     --alignments_dir /workspace/data/corpus/alignments \
     --corpus_dir /workspace/data/corpus/wav \
     --output_dir /workspace/data \
+    --token_type phn \
     --data_percentage 1.0
 ```
 
@@ -172,9 +174,9 @@ python mfa_prep_stage2_data.py \
 Run validation checks to ensure data directories are correct:
 
 ```bash
-./utils/validate_data_dir.sh --no-feats /workspace/data/tr_no_dev
-./utils/validate_data_dir.sh --no-feats /workspace/data/dev
-./utils/validate_data_dir.sh --no-feats /workspace/data/eval1
+# ./utils/validate_data_dir.sh --no-feats /workspace/data/tr_no_dev
+# ./utils/validate_data_dir.sh --no-feats /workspace/data/dev
+# ./utils/validate_data_dir.sh --no-feats /workspace/data/eval1
 ./utils/validate_data_dir.sh --no-feats /workspace/data/tr_no_dev_phn
 ./utils/validate_data_dir.sh --no-feats /workspace/data/dev_phn
 ./utils/validate_data_dir.sh --no-feats /workspace/data/eval1_phn
@@ -187,7 +189,12 @@ Run validation checks to ensure data directories are correct:
 For multi-speaker training, enable speaker embeddings and assign unique speaker IDs (SIDs). If using x-vectors from Kaldi:
 
 ```bash
-./run.sh --stage 2 --stop-stage 3 --use_spk_embed true --spk_embed_tool kaldi --use_sid true --nj $(nproc)
+nohup ./run.sh --stage 2 --stop-stage 3 \
+    --use_spk_embed true \
+    --spk_embed_tool kaldi \
+    --use_sid true \
+    --spk_embed_tag xvector \
+    --nj $(nproc) > nohup.out 2>&1 &
 ```
 
 Explanation of flags:
@@ -204,6 +211,7 @@ Before training, run the steps needed to generate statistics and other prerequis
 
 ```bash
 nohup ./run.sh --stage 4 --stop-stage 6 \
+    --token_type phn \
     --tag vits_xvector_maltese \
     --nj $(nproc) \
     --ngpu <gpus_count> > nohup.out 2>&1 &
@@ -219,9 +227,15 @@ Because the data preparation steps (stages 1–6) have already been completed, y
 
 ```bash
 nohup ./run.sh --stage 7 --stop-stage 7 \
-    --use_spk_embed true --spk_embed_tool kaldi --use_sid true \
+    --token_type phn \
+    --tts_task gan_tts \
+    --use_spk_embed true \
+    --spk_embed_tool kaldi \
+    --spk_embed_tag xvector \
+    --use_sid true \
     --train_config path/to/train/config.yaml \
-    --tag <experiment tag> \
+    --inference_config path/to/decode_vits.yaml \
+    --tag exp_1_0 \
     --nj $(nproc) \
     --ngpu <gpus_count> > nohup.out 2>&1 &
 ```

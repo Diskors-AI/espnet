@@ -52,50 +52,46 @@ def extract_phoneme_durations(
 
 def add_entry(
     data_entries,
-    set_name,
-    basename,
-    wav_path,
-    segment_id,
-    text,
-    phones,
-    phone_durations,
-    speaker,
-    start,
-    end,
+    set_name: str,
+    token_type: str,
+    basename: str,
+    wav_path: Path,
+    segment_id: str,
+    text: str,
+    phones: List[str],
+    phone_durations: List[float],
+    speaker: str,
+    start: float,
+    end: float,
 ):
-    """Add entries for both text and phoneme sets."""
     if basename not in [entry[0] for entry in data_entries[set_name]["wav_scp"]]:
         data_entries[set_name]["wav_scp"].append((basename, wav_path))
-        data_entries[f"{set_name}_phn"]["wav_scp"].append((basename, wav_path))
 
-    # Add text and phoneme-based entries
-    data_entries[set_name]["text"].append((segment_id, text))
-    data_entries[f"{set_name}_phn"]["text"].append((segment_id, " ".join(phones)))
+    entry_text = " ".join(phones) if token_type == "phn" else text
+    data_entries[set_name]["text"].append((segment_id, entry_text))
     data_entries[set_name]["segments"].append((segment_id, basename, start, end))
-    data_entries[f"{set_name}_phn"]["segments"].append(
-        (segment_id, basename, start, end)
-    )
     data_entries[set_name]["durations"].append(
         (segment_id, " ".join(f"{d:.6f}" for d in phone_durations))
     )
-    data_entries[f"{set_name}_phn"]["durations"].append(
-        (segment_id, " ".join(f"{d:.6f}" for d in phone_durations))
-    )
     data_entries[set_name]["utt2spk"].append((segment_id, speaker))
-    data_entries[f"{set_name}_phn"]["utt2spk"].append((segment_id, speaker))
     data_entries[set_name]["spk2utt"][speaker].append(segment_id)
-    data_entries[f"{set_name}_phn"]["spk2utt"][speaker].append(segment_id)
 
 
 def gather_data(
     alignments_dir: str,
     corpus_dir: str,
-    hop_size: int = 256,
-    data_percentage: float = 1.0,
+    data_percentage: float,
+    token_type: str,
 ) -> Dict[str, Dict[str, List]]:
-    """Gather data for each set (train, dev, test) into in-memory structures for both text and phoneme folders."""
     alignments_dir = Path(alignments_dir)
     corpus_dir = Path(corpus_dir)
+
+    suffix = "_phn" if token_type == "phn" else ""
+    set_names = {
+        "train": train_dir_name + suffix,
+        "dev": dev_dir_name + suffix,
+        "test": test_dir_name + suffix,
+    }
 
     data_entries = {
         name: {
@@ -106,14 +102,7 @@ def gather_data(
             "utt2spk": [],
             "spk2utt": defaultdict(list),
         }
-        for name in [
-            train_dir_name,
-            dev_dir_name,
-            test_dir_name,
-            train_dir_name_phn,
-            dev_dir_name_phn,
-            test_dir_name_phn,
-        ]
+        for name in set_names.values()
     }
 
     all_textgrids = sorted(alignments_dir.glob("*.TextGrid"))
@@ -154,17 +143,13 @@ def gather_data(
                 continue
 
             rnd = random.randint(1, 100)
-            if rnd <= 80:
-                set_name = train_dir_name
-            elif 81 <= rnd <= 90:
-                set_name = dev_dir_name
-            else:
-                set_name = test_dir_name
+            set_key = "train" if rnd <= 80 else "dev" if rnd <= 90 else "test"
+            set_name = set_names[set_key]
 
-            # Add entries for both text and phoneme sets
             add_entry(
                 data_entries,
                 set_name,
+                token_type,
                 basename,
                 wav_path,
                 segment_id,
@@ -215,15 +200,14 @@ def create_stage2_data(
     alignments_dir: str,
     corpus_dir: str,
     output_dir: str,
-    hop_size: int = 256,
+    token_type: str,
     data_percentage: float = 1.0,
 ) -> None:
-    """Full process of gathering data and writing it to files."""
     data_entries = gather_data(
         alignments_dir=alignments_dir,
         corpus_dir=corpus_dir,
-        hop_size=hop_size,
         data_percentage=data_percentage,
+        token_type=token_type,
     )
     write_data(data_entries, output_dir)
 
@@ -251,13 +235,17 @@ if __name__ == "__main__":
         help="Path to the output directory where data will be saved.",
     )
     parser.add_argument(
-        "--hop_size", type=int, default=256, help="Hop size for STFT (default: 256)."
-    )
-    parser.add_argument(
         "--data_percentage",
         type=float,
         default=1.0,
         help="Percentage of the data to use for training (0.0 < p <= 1.0).",
+    )
+    parser.add_argument(
+        "--token_type",
+        type=str,
+        choices=["phn", "char"],
+        required=True,
+        help="Whether to generate phoneme-based ('phn') or character-based ('char') folders.",
     )
 
     args = parser.parse_args()
@@ -266,6 +254,6 @@ if __name__ == "__main__":
         alignments_dir=args.alignments_dir,
         corpus_dir=args.corpus_dir,
         output_dir=args.output_dir,
-        hop_size=args.hop_size,
         data_percentage=args.data_percentage,
+        token_type=args.token_type,
     )
